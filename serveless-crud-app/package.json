@@ -1,0 +1,41 @@
+{
+  "name": "serveless-crud-app",
+  "description": "A simple CRUD app using serveless concepts",
+  "version": "0.0.1",
+  "private": false,
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mysql2": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.1677.0",
+    "aws-sdk-client-mock": "^2.0.0",
+    "chalk": "^5.3.0",
+    "jest": "^29.2.1"
+  },
+  "scripts": {
+    "start": "DB_TYPE=mysql DB_HOST=<DB_HOST> DB_USER=<DB_USER> DB_PASSWORD=<DB_PASSWORD> DB_NAME=<DB_NAME> node --experimental-vm-modules ./src/index.mjs",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+    "create:table": "node --experimental-vm-modules ./src/triggers/create-table.mjs",
+    "get:all": "node --experimental-vm-modules ./src/triggers/get-all.mjs",
+    "get:id": "node --experimental-vm-modules ./src/triggers/get-id.mjs",
+    "create": "node --experimental-vm-modules ./src/triggers/create.mjs",
+    "update": "node --experimental-vm-modules ./src/triggers/update.mjs",
+    "delete": "node --experimental-vm-modules ./src/triggers/delete.mjs"
+  },
+  "jest": {
+    "testMatch": [
+      "**/__tests__/**/*.[jt]s?(x)",
+      "**/?(*.)+(spec|test).[jt]s?(x)",
+      "**/__tests__/**/*.mjs?(x)",
+      "**/?(*.)+(spec|test).mjs?(x)"
+    ],
+    "moduleFileExtensions": [
+      "mjs",
+      "js"
+    ]
+  }
+}

@@ -1,0 +1,388 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Template to create a Lambda function and an RDS MySQL instance with VPC using AWS SAM.
+Transform:
+- AWS::Serverless-2016-10-31
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 100
+    # Handler: index.handler
+    Architectures:
+      # x86_64: This is the traditional and widely supported architecture. It is a safe choice if you are using libraries or dependencies that are not compatible with ARM.
+      # arm64: This is the ARM-based architecture, which can offer better performance and cost efficiency compared to x86_64. AWS claims that ARM-based Lambda functions can be up to 20% cheaper and have up to 20% better performance.
+      - arm64
+    MemorySize: 128
+    Environment:
+      Variables:
+        TABLE_NAME: users
+        DB_HOST: !GetAtt MyDBInstance.Endpoint.Address
+        DB_NAME: !Ref DBName
+        DB_USER: !Ref DBUser
+        DB_PASSWORD: !Ref DBPassword
+        DB_TYPE: 'mysql'
+    VpcConfig:
+      SubnetIds:
+        - !Ref MyPublicSubnet
+        - !Ref MyPrivateSubnet1
+      SecurityGroupIds:
+        - !GetAtt MyDBSecurityGroup.GroupId
+    # Policies:
+      #   # Give Create/Read/Update/Delete Permissions to the SampleTable
+      # - DynamoDBCrudPolicy:
+      #     TableName: !Ref SampleTable
+    LoggingConfig:
+      LogFormat: JSON
+
+  # Api:
+  #   EndpointConfiguration: REGIONAL
+  #   Cors: "'www.example.com'"
+  #   Domain:
+  #     DomainName: www.my-domain.com
+  #     CertificateArn: my-valid-cert-arn
+  #     EndpointConfiguration: EDGE
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: "The environment to deploy to"
+
+  DBInstanceIdentifier:
+    Type: String
+    Default: servelesscrudappdbidentifier
+    Description: "The DB instance identifier"
+
+  DBName:
+    Type: String
+    Default: servelesscrudapp
+    Description: "The database name"
+
+  DBUser:
+    Type: String
+    Default: admin
+    Description: "The database admin user"
+
+  DBPassword:
+    Type: String
+    Default: servelesspassword
+    NoEcho: true
+    Description: "The database admin password"
+
+  AvailabilityZone1:
+    Type: String
+    Default: us-east-1a
+    Description: "First Availability Zone"
+  AvailabilityZone2:
+    Type: String
+    Default: us-east-1b
+    Description: "Second Availability Zone"
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${MyServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  MyDBInstanceEndpoint:
+    Description: "Endpoint of the RDS instance"
+    Value: !GetAtt MyDBInstance.Endpoint.Address
+
+  # SimpleTable:
+  #   SSESpecification:
+  #     SSEEnabled: true
+
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:
+  MyServerlessApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Dev
+      DefinitionBody:
+        swagger: "2.0"
+        info:
+          title: "Serveless CRUD API"
+          version: "1.0"
+        paths:
+          /create-users-table:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: "GET"
+                type: "aws_proxy"
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateTableLambdaFunction.Arn}/invocations
+          /:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: "GET"
+                type: "aws_proxy"
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetAllItemsLambdaFunction.Arn}/invocations
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: "POST"
+                type: "aws_proxy"
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateItemLambdaFunction.Arn}/invocations
+          /{id}:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: "GET"
+                type: "aws_proxy"
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateItemLambdaFunction.Arn}/invocations
+            put:
+              x-amazon-apigateway-integration:
+                httpMethod: "PUT"
+                type: "aws_proxy"
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetByIdLambdaFunction.Arn}/invocations
+            delete:
+              x-amazon-apigateway-integration:
+                httpMethod: "DELETE"
+                type: "aws_proxy"
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteItemLambdaFunction.Arn}/invocations
+
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: MyVPC
+        - Key: Environment
+          Value: !Ref Environment
+
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyInternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref MyInternetGateway
+
+  MyPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: MyPublicSubnet
+
+  MyPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Ref AvailabilityZone1
+      Tags:
+        - Key: Name
+          Value: MyPrivateSubnet1
+
+  MyPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Ref AvailabilityZone2
+      Tags:
+        - Key: Name
+          Value: MyPrivateSubnet2
+
+  MyRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: MyRouteTable
+
+  MyRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref MyRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref MyInternetGateway
+
+  MySubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref MyPublicSubnet
+      RouteTableId: !Ref MyRouteTable
+
+  MyDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for RDS MySQL instance"
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+
+  MyDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Ref DBInstanceIdentifier
+      AllocatedStorage: "20"
+      DBInstanceClass: db.t3.micro
+      Engine: MySQL
+      # Prevents: Resource handler returned message: "RDS does not support creating a DB instance
+      # with the following combination: # DBInstanceClass=db.t2.micro, Engine=mysql,EngineVersion=8.0.35
+      EngineVersion: 8.0.35 # The last one in the platform
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      DBName: !Ref DBName
+      VPCSecurityGroups:
+        - !GetAtt MyDBSecurityGroup.GroupId
+      # Avoid "The DB instance and EC2 security group are in different VPC"
+      DBSubnetGroupName: !Ref MyDBSubnetGroup
+      PubliclyAccessible: true
+      # Avoid error:
+      # W2001 Parameter Environment not used.
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for RDS instance"
+      SubnetIds:
+        - !Ref MyPublicSubnet
+        - !Ref MyPrivateSubnet1
+        - !Ref MyPrivateSubnet2
+
+  # We need to define a LambdaExecutionRole so that our Lambda functions have the necessary permissions 
+  # to create, insert, update, and delete resources in the database. 
+  # The role should include policies that allow the Lambda function to access and manipulate the database.
+  # (A paid account)
+  # LambdaExecutionRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     Policies:
+  #       - PolicyName: LambdaRDSAccessPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - rds:DescribeDBInstances
+  #                 - rds:Connect
+  #                 - rds:CreateDBInstance
+  #                 - rds:DeleteDBInstance
+  #                 - rds:ModifyDBInstance
+  #                 - rds:RebootDBInstance
+  #                 - rds:StartDBInstance
+  #                 - rds:StopDBInstance
+  #               Resource: '*'
+  #             - Effect: Allow
+  #               Action:
+  #                 - ec2:DescribeSecurityGroups
+  #                 - ec2:DescribeSubnets
+  #                 - ec2:DescribeVpcs
+  #               Resource: '*'
+
+
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  CreateTableLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/users.createTableHandler
+      Description: A simple example includes a HTTP get method to get create 'users' table inside a database.
+      # Role: !GetAtt LambdaExecutionRole.Arn
+      Role: arn:aws:iam::520138362070:role/LabRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /create-users-table
+            Method: GET
+
+  GetAllItemsLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/users.getAllItemsHandler
+      Description: A simple example includes a HTTP get method to get all items from a database's table.
+      # Role: !GetAtt LambdaExecutionRole.Arn
+      Role: arn:aws:iam::520138362070:role/LabRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /
+            Method: GET
+
+  GetByIdLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/users.getByIdHandler
+      Description: A simple example includes a HTTP get method to get one item from a database's table.
+      # Role: !GetAtt LambdaExecutionRole.Arn
+      Role: arn:aws:iam::520138362070:role/LabRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{id}
+            Method: GET
+
+  CreateItemLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/users.createItemHandler
+      Description: A simple example includes a HTTP post method to add one item to a database's table.
+      # Role: !GetAtt LambdaExecutionRole.Arn
+      Role: arn:aws:iam::520138362070:role/LabRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /
+            Method: POST
+
+  UpdateItemLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/users.updateItemHandler
+      Description: A simple example includes a HTTP put method to update one item to a database's table.
+      # Role: !GetAtt LambdaExecutionRole.Arn
+      Role: arn:aws:iam::520138362070:role/LabRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{id}
+            Method: PUT
+
+  DeleteItemLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/users.deleteItemHandler
+      Description: A simple example includes a HTTP delete method to delete one item from a database's table.
+      # Role: !GetAtt LambdaExecutionRole.Arn
+      Role: arn:aws:iam::520138362070:role/LabRole
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{id}
+            Method: DELETE
