@@ -6,9 +6,9 @@ const payload = {
 }
 
 const params = {
-  // we need to take the entire function name from the AWS console
-  // FunctionName: "CreateTableLambdaFunction",
-  FunctionName: "serveless-crud-app-CreateTableLambdaFunction-9b3TJJaL9e2a",
+  FunctionName: "CreateTableLambdaFunction",
+  // we need to take the entire function name from the AWS console (when FunctionName is not defined)
+  // FunctionName: "serveless-crud-app-CreateTableLambdaFunction-9b3TJJaL9e2a",
   Payload: JSON.stringify(payload)
 }
 

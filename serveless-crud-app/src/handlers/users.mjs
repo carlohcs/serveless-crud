@@ -26,7 +26,7 @@ export const createTableHandler = async (event) => {
 
   if (event.httpMethod !== "GET") {
     throw new Error(
-      `createTable only accept GET method, you tried: ${event.httpMethod}`
+      `createTable only accept GET method, you tried: ${JSON.stringify(event)}`
     )
   }
 
@@ -39,7 +39,7 @@ export const createTableHandler = async (event) => {
     }
   } catch (err) {
     log(`API Error: ${err}`)
-    response.error = err.message;
+    response.error = err.message
   }
 
   // All log statements are written to CloudWatch
@@ -60,7 +60,7 @@ export const getAllItemsHandler = async (event) => {
 
   if (event.httpMethod !== "GET") {
     throw new Error(
-      `getAllItems only accept GET method, you tried: ${event.httpMethod}`
+      `getAllItems only accept GET method, you tried: ${JSON.stringify(event)}`
     )
   }
 
@@ -73,7 +73,7 @@ export const getAllItemsHandler = async (event) => {
     }
   } catch (err) {
     log(`API Error: ${err}`)
-    response.error = err.message;
+    response.error = err.message
   }
 
   // All log statements are written to CloudWatch
@@ -94,7 +94,7 @@ export const getByIdHandler = async (event) => {
 
   if (event.httpMethod !== "GET") {
     throw new Error(
-      `getById only accept GET method, you tried: ${event.httpMethod}`
+      `getById only accept GET method, you tried: ${JSON.stringify(event)}`
     )
   }
 
@@ -110,7 +110,7 @@ export const getByIdHandler = async (event) => {
     }
   } catch (err) {
     log(`API Error: ${err}`)
-    response.error = err.message;
+    response.error = err.message
   }
 
   // All log statements are written to CloudWatch
@@ -131,7 +131,7 @@ export const createItemHandler = async (event) => {
 
   if (event.httpMethod !== "POST") {
     throw new Error(
-      `createItem only accept POST method, you tried: ${event.httpMethod}`
+      `createItem only accept POST method, you tried: ${JSON.stringify(event)}`
     )
   }
 
@@ -147,7 +147,7 @@ export const createItemHandler = async (event) => {
     }
   } catch (err) {
     log(`API Error: ${err}`)
-    response.error = err.message;
+    response.error = err.message
   }
 
   // All log statements are written to CloudWatch
@@ -168,7 +168,7 @@ export const updateItemHandler = async (event) => {
 
   if (event.httpMethod !== "PUT") {
     throw new Error(
-      `updateItem only accept PUT method, you tried: ${event.httpMethod}`
+      `updateItem only accept PUT method, you tried: ${JSON.stringify(event)}`
     )
   }
 
@@ -185,7 +185,7 @@ export const updateItemHandler = async (event) => {
     }
   } catch (err) {
     log(`API Error: ${err}`)
-    response.error = err.message;
+    response.error = err.message
   }
 
   // All log statements are written to CloudWatch
@@ -206,7 +206,9 @@ export const deleteItemHandler = async (event) => {
 
   if (event.httpMethod !== "DELETE") {
     throw new Error(
-      `deleteItem only accept DELETE method, you tried: ${event.httpMethod}`
+      `deleteItem only accept DELETE method, you tried: ${JSON.stringify(
+        event
+      )}`
     )
   }
 
@@ -221,7 +223,7 @@ export const deleteItemHandler = async (event) => {
     }
   } catch (err) {
     log(`API Error: ${err}`)
-    response.error = err.message;
+    response.error = err.message
   }
 
   // All log statements are written to CloudWatch
@@ -229,3 +231,66 @@ export const deleteItemHandler = async (event) => {
 
   return response
 }
+
+// Example to use in combination with API Gateway (/proxy+)
+// /{proxy+}:
+// x-amazon-apigateway-any-method:
+//   x-amazon-apigateway-integration:
+//     httpMethod: "POST"
+//     type: "aws_proxy"
+//     uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${YourLambdaFunction.Arn}/invocations
+//     passthroughBehavior: "when_no_match"
+//     requestTemplates:
+//       application/json: '{"statusCode": 200}'
+//
+// export const lambdaHandler = async (event) => {
+//   let response = {
+//     statusCode: 500,
+//     body: {}
+//   }
+
+//   try {
+//     switch (event.httpMethod) {
+//       case 'GET':
+//         if (event.path === '/users') {
+//           response = await getAllItemsHandler(event)
+//         } else if (event.path.startsWith('/users/')) {
+//           const userId = event.path.split('/').pop()
+//           response = await getItemHandler(event, userId)
+//         } else {
+//           response = {
+//             statusCode: 404,
+//             body: JSON.stringify({ message: 'Not Found' })
+//           }
+//         }
+//         break
+//       case 'POST':
+//         if (event.path === '/users') {
+//           response = await createItemHandler(event)
+//         } else {
+//           response = {
+//             statusCode: 404,
+//             body: JSON.stringify({ message: 'Not Found' })
+//           }
+//         }
+//         break
+//       // Adicione outros métodos HTTP conforme necessário
+//       default:
+//         response = {
+//           statusCode: 405,
+//           body: JSON.stringify({ message: `Method Not Allowed: ${event.httpMethod}` })
+//         }
+//     }
+//   } catch (err) {
+//     log(`API Error: ${err}`)
+//     response = {
+//       statusCode: 500,
+//       body: JSON.stringify({ message: err.message })
+//     }
+//   }
+
+//   // All log statements are written to CloudWatch
+//   logResponse(event, response)
+
+//   return response
+// }

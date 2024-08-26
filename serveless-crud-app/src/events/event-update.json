@@ -1,0 +1,7 @@
+{
+  "httpMethod": "PUT",
+  "pathParameters": {
+    "id": "1"
+  },
+  "body": "{\"name\": \"Carlos Santana\"}"
+}

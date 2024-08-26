@@ -15,7 +15,7 @@ const tableName = process.env.SAMPLE_TABLE
 export const getAllItemsHandler = async (event) => {
   if (event.httpMethod !== "GET") {
     throw new Error(
-      `getAllItems only accept GET method, you tried: ${event.httpMethod}`
+      `getAllItems only accept GET method, you tried: ${JSON.stringify(event.httpMethod)}`
     )
   }
   // All log statements are written to CloudWatch
@@ -53,7 +53,7 @@ export const getAllItemsHandler = async (event) => {
 export const getByIdHandler = async (event) => {
   if (event.httpMethod !== "GET") {
     throw new Error(
-      `getMethod only accept GET method, you tried: ${event.httpMethod}`
+      `getMethod only accept GET method, you tried: ${JSON.stringify(event.httpMethod)}`
     )
   }
   // All log statements are written to CloudWatch
@@ -94,7 +94,7 @@ export const getByIdHandler = async (event) => {
 export const putItemHandler = async (event) => {
   if (event.httpMethod !== "POST") {
     throw new Error(
-      `postMethod only accepts POST method, you tried: ${event.httpMethod} method.`
+      `postMethod only accepts POST method, you tried: ${JSON.stringify(event.httpMethod)} method.`
     )
   }
   // All log statements are written to CloudWatch

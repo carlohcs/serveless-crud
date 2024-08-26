@@ -11,9 +11,9 @@ const payload = {
 }
 
 const params = {
-  // we need to take the entire function name from the AWS console
-  // FunctionName: "DeleteItemLambdaFunction",
-  FunctionName: "serveless-crud-app-DeleteItemLambdaFunction-lMkaUCtS65dO",
+  FunctionName: "DeleteItemLambdaFunction",
+  // we need to take the entire function name from the AWS console (when FunctionName is not defined)
+  // FunctionName: "serveless-crud-app-DeleteItemLambdaFunction-lMkaUCtS65dO",
   Payload: JSON.stringify(payload)
 }
 

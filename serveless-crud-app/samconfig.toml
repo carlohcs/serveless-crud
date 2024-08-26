@@ -4,10 +4,10 @@ version = 0.1
 
 [default]
 [default.global.parameters]
-stack_name = "serveless-crud-app"
+stack_name = "serveless-crud-app-1724628622"
 
 [default.build.parameters]
-cached = true
+cached = false
 parallel = true
 
 [default.validate.parameters]
@@ -20,7 +20,7 @@ resolve_s3 = true
 s3_prefix = "serveless-crud-app"
 region = "us-east-1"
 profile = "academy"
-parameter_overrides = "Environment=\"dev\" DBInstanceIdentifier=\"servelesscrudappdbidentifier\" DBName=\"servelesscrudapp\" DBUser=\"admin\""
+parameter_overrides = "Environment=\"dev\" DBInstanceIdentifier=\"servelesscrudappdb\" DBName=\"servelesscrudapp\" DBUser=\"admin\""
 image_repositories = []
 disable_rollback = true
 

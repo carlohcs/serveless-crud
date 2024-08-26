@@ -6,9 +6,9 @@ const payload = {
 }
 
 const params = {
-  // we need to take the entire function name from the AWS console
-  // FunctionName: "GetAllItemsLambdaFunction",
-  FunctionName: "serveless-crud-app-GetAllItemsLambdaFunction-OE22TZ2B5hqs",
+  FunctionName: "GetAllItemsLambdaFunction",
+  // we need to take the entire function name from the AWS console (when FunctionName is not defined)
+  // FunctionName: "serveless-crud-app-GetAllItemsLambdaFunction-OE22TZ2B5hqs",
   Payload: JSON.stringify(payload)
 }
 

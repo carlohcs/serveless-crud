@@ -27,6 +27,7 @@ Globals:
       SubnetIds:
         - !Ref MyPublicSubnet
         - !Ref MyPrivateSubnet1
+        # - !Ref MyPrivateSubnet2
       SecurityGroupIds:
         - !GetAtt MyDBSecurityGroup.GroupId
     # Policies:
@@ -55,7 +56,7 @@ Parameters:
 
   DBInstanceIdentifier:
     Type: String
-    Default: servelesscrudappdbidentifier
+    Default: servelesscrudappdb
     Description: "The DB instance identifier"
 
   DBName:
@@ -74,19 +75,28 @@ Parameters:
     NoEcho: true
     Description: "The database admin password"
 
-  AvailabilityZone1:
-    Type: String
-    Default: us-east-1a
-    Description: "First Availability Zone"
-  AvailabilityZone2:
-    Type: String
-    Default: us-east-1b
-    Description: "Second Availability Zone"
+  # AvailabilityZone1:
+  #   Type: String
+  #   Default: us-east-1a
+  #   Description: "First Availability Zone"
+  # AvailabilityZone2:
+  #   Type: String
+  #   Default: us-east-1b
+  #   Description: "Second Availability Zone"
 
 Outputs:
-  WebEndpoint:
-    Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${MyServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  MyServerlessApi:
+    Description: "API Gateway endpoint URL for Dev stage"
+    Value: !Sub "https://${MyServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/Dev/"
+  MyServerlessApiRestApiId:
+    Description: 'API Gateway ARN for MyServerlessApi'
+    Value: !Ref MyServerlessApi
+    Export:
+      Name: MyServerlessApi-RestApiId
+  MyServerlessApiRootResourceId:
+    Value: !GetAtt MyServerlessApi.RootResourceId
+    Export:
+      Name: MyServerlessApi-RootResourceId
   MyDBInstanceEndpoint:
     Description: "Endpoint of the RDS instance"
     Value: !GetAtt MyDBInstance.Endpoint.Address
@@ -108,39 +118,62 @@ Resources:
           title: "Serveless CRUD API"
           version: "1.0"
         paths:
+          # Looks like the issue was with out API Swagger yml file. 
+          # As indicated in the docs, x-amazon-apigateway-integration MUST be a POST for lamba integrations.
+          # https://github.com/aws/serverless-application-model/issues/430#issuecomment-389271807
           /create-users-table:
             get:
               x-amazon-apigateway-integration:
-                httpMethod: "GET"
+                httpMethod: "POST"
                 type: "aws_proxy"
                 uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateTableLambdaFunction.Arn}/invocations
+                summary: Create users table
           /:
             get:
               x-amazon-apigateway-integration:
-                httpMethod: "GET"
+                httpMethod: "POST"
                 type: "aws_proxy"
                 uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetAllItemsLambdaFunction.Arn}/invocations
+                summary: Get all items
             post:
               x-amazon-apigateway-integration:
                 httpMethod: "POST"
                 type: "aws_proxy"
                 uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateItemLambdaFunction.Arn}/invocations
+                summary: Create a new user
+          # We cannot process PATH requests by now. We should create API Gateway Resource that will allow Lambda to access the path parameters.
+          # https://stackoverflow.com/questions/57014913/unable-to-process-path-parameter-in-api-gateway-lambda
+          #
+          # Or use something like:
+          # /{proxy+}:
+          # x-amazon-apigateway-any-method:
+          #   x-amazon-apigateway-integration:
+          #     httpMethod: "POST"
+          #     type: "aws_proxy"
+          #     uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${YourLambdaFunction.Arn}/invocations
+          #     passthroughBehavior: "when_no_match"
+          #     requestTemplates:
+          #       application/json: '{"statusCode": 200}'
           /{id}:
             get:
               x-amazon-apigateway-integration:
-                httpMethod: "GET"
+                httpMethod: "POST"
                 type: "aws_proxy"
                 uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateItemLambdaFunction.Arn}/invocations
+                summary: Get user by id
             put:
               x-amazon-apigateway-integration:
-                httpMethod: "PUT"
+                httpMethod: "POST"
                 type: "aws_proxy"
                 uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetByIdLambdaFunction.Arn}/invocations
+                summary: Update a user
             delete:
               x-amazon-apigateway-integration:
-                httpMethod: "DELETE"
+                httpMethod: "POST"
                 type: "aws_proxy"
                 uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteItemLambdaFunction.Arn}/invocations
+                summary: Delete a user
+    DeletionPolicy: "Delete"
 
   MyVPC:
     Type: AWS::EC2::VPC
@@ -153,6 +186,7 @@ Resources:
           Value: MyVPC
         - Key: Environment
           Value: !Ref Environment
+    DeletionPolicy: "Delete"
 
   MyInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -160,12 +194,14 @@ Resources:
       Tags:
         - Key: Name
           Value: MyInternetGateway
+    DeletionPolicy: "Delete"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref MyVPC
       InternetGatewayId: !Ref MyInternetGateway
+    DeletionPolicy: "Delete"
 
   MyPublicSubnet:
     Type: AWS::EC2::Subnet
@@ -173,62 +209,59 @@ Resources:
       VpcId: !Ref MyVPC
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [ 0, !GetAZs ]
       Tags:
         - Key: Name
           Value: MyPublicSubnet
+    DeletionPolicy: "Delete"
 
   MyPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref MyVPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !Ref AvailabilityZone1
+      # AvailabilityZone: !Ref AvailabilityZone1
+      AvailabilityZone: !Select [ 1, !GetAZs ]
       Tags:
         - Key: Name
           Value: MyPrivateSubnet1
+    DeletionPolicy: "Delete"
 
-  MyPrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MyVPC
-      CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Ref AvailabilityZone2
-      Tags:
-        - Key: Name
-          Value: MyPrivateSubnet2
+  # MyPrivateSubnet2:
+  #   Type: AWS::EC2::Subnet
+  #   Properties:
+  #     VpcId: !Ref MyVPC
+  #     CidrBlock: 10.0.3.0/24
+  #     # AvailabilityZone: !Ref AvailabilityZone2
+  #     AvailabilityZone: !Select [ 1, !GetAZs ]
+  #     Tags:
+  #       - Key: Name
+  #         Value: MyPrivateSubnet2
 
-  MyRouteTable:
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MyVPC
       Tags:
         - Key: Name
-          Value: MyRouteTable
+          Value: PublicRouteTable
+    DeletionPolicy: "Delete"
 
-  MyRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
     Properties:
-      RouteTableId: !Ref MyRouteTable
+      RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref MyInternetGateway
+    DeletionPolicy: "Delete"
 
-  MySubnetRouteTableAssociation:
+  PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref MyPublicSubnet
-      RouteTableId: !Ref MyRouteTable
-
-  MyDBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security group for RDS MySQL instance"
-      VpcId: !Ref MyVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0
+      RouteTableId: !Ref PublicRouteTable
+    DeletionPolicy: "Delete"
 
   MyDBInstance:
     Type: AWS::RDS::DBInstance
@@ -243,16 +276,47 @@ Resources:
       MasterUsername: !Ref DBUser
       MasterUserPassword: !Ref DBPassword
       DBName: !Ref DBName
+      # https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_CreateDBInstance.html
+      # EnableIAMDatabaseAuthentication: true
       VPCSecurityGroups:
         - !GetAtt MyDBSecurityGroup.GroupId
       # Avoid "The DB instance and EC2 security group are in different VPC"
       DBSubnetGroupName: !Ref MyDBSubnetGroup
+      # https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_CreateDBInstance.html - PubliclyAccessible
       PubliclyAccessible: true
       # Avoid error:
       # W2001 Parameter Environment not used.
       Tags:
         - Key: Environment
           Value: !Ref Environment
+    # Prevents database to no be removed
+    DeletionPolicy: "Delete"
+
+  MyDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for RDS MySQL instance"
+      VpcId: !Ref MyVPC
+      # Doesn't work
+      # SecurityGroupIngress:
+      #   - IpProtocol: tcp
+      #     FromPort: 3306
+      #     ToPort: 3306
+      #     CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: MyDBSecurityGroup
+    DeletionPolicy: "Delete"
+
+  MyDBIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 3306
+      ToPort: 3306
+      GroupId: !Ref MyDBSecurityGroup
+      IpProtocol: tcp
+      CidrIp: 0.0.0.0/0
+    DeletionPolicy: "Delete"
 
   MyDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -261,7 +325,8 @@ Resources:
       SubnetIds:
         - !Ref MyPublicSubnet
         - !Ref MyPrivateSubnet1
-        - !Ref MyPrivateSubnet2
+        # - !Ref MyPrivateSubnet2
+    DeletionPolicy: "Delete"
 
   # We need to define a LambdaExecutionRole so that our Lambda functions have the necessary permissions 
   # to create, insert, update, and delete resources in the database. 
@@ -306,83 +371,126 @@ Resources:
   CreateTableLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/users.createTableHandler
+      Handler: ./src/handlers/users.createTableHandler
+      # When the deploy is done, SAM will do a package (zip) 
+      # from this folder.
+      CodeUri: ./
       Description: A simple example includes a HTTP get method to get create 'users' table inside a database.
+      # Prevents to create a name like: 'serveless-crud-app-CreateTableLambdaFunction-9b3TJJaL9e2a'
+      FunctionName: CreateTableLambdaFunction
       # Role: !GetAtt LambdaExecutionRole.Arn
       Role: arn:aws:iam::520138362070:role/LabRole
       Events:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref MyServerlessApi
             Path: /create-users-table
             Method: GET
+    DeletionPolicy: "Delete"
 
   GetAllItemsLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/users.getAllItemsHandler
+      Handler: ./src/handlers/users.getAllItemsHandler
+      # When the deploy is done, SAM will do a package (zip) 
+      # from this folder.
+      CodeUri: ./
       Description: A simple example includes a HTTP get method to get all items from a database's table.
+      # Prevents to create a name like: 'serveless-crud-app-GetAllItemsLambdaFunction-OE22TZ2B5hqs'
+      FunctionName: GetAllItemsLambdaFunction
       # Role: !GetAtt LambdaExecutionRole.Arn
       Role: arn:aws:iam::520138362070:role/LabRole
       Events:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref MyServerlessApi
             Path: /
             Method: GET
+    DeletionPolicy: "Delete"
 
   GetByIdLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/users.getByIdHandler
+      Handler: ./src/handlers/users.getByIdHandler
+      # When the deploy is done, SAM will do a package (zip) 
+      # from this folder.
+      CodeUri: ./
       Description: A simple example includes a HTTP get method to get one item from a database's table.
+      # Prevents to create a name like: 'serveless-crud-app-GetByIdLambdaFunction-zrwjZeOIWA6Z'
+      FunctionName: GetByIdLambdaFunction
       # Role: !GetAtt LambdaExecutionRole.Arn
       Role: arn:aws:iam::520138362070:role/LabRole
       Events:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref MyServerlessApi
             Path: /{id}
             Method: GET
+    DeletionPolicy: "Delete"
 
   CreateItemLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/users.createItemHandler
+      Handler: ./src/handlers/users.createItemHandler
+      # When the deploy is done, SAM will do a package (zip) 
+      # from this folder.
+      CodeUri: ./
       Description: A simple example includes a HTTP post method to add one item to a database's table.
       # Role: !GetAtt LambdaExecutionRole.Arn
+      # Prevents to create a name like: 'serveless-crud-app-CreateItemLambdaFunction-eddSJY1H9fYa'
+      FunctionName: CreateItemLambdaFunction
       Role: arn:aws:iam::520138362070:role/LabRole
       Events:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref MyServerlessApi
             Path: /
             Method: POST
+    DeletionPolicy: "Delete"
 
   UpdateItemLambdaFunction:
     Type: AWS::Serverless::Function
+
     Properties:
-      Handler: src/handlers/users.updateItemHandler
+      Handler: ./src/handlers/users.updateItemHandler
+      # When the deploy is done, SAM will do a package (zip) 
+      # from this folder.
+      CodeUri: ./
       Description: A simple example includes a HTTP put method to update one item to a database's table.
+      # Prevents to create a name like: 'serveless-crud-app-UpdateItemLambdaFunction-uO7boV4tgzmi'
+      FunctionName: UpdateItemLambdaFunction
       # Role: !GetAtt LambdaExecutionRole.Arn
       Role: arn:aws:iam::520138362070:role/LabRole
       Events:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref MyServerlessApi
             Path: /{id}
             Method: PUT
+    DeletionPolicy: "Delete"
 
   DeleteItemLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/handlers/users.deleteItemHandler
+      Handler: ./src/handlers/users.deleteItemHandler
+      # When the deploy is done, SAM will do a package (zip) 
+      # from this folder.
+      CodeUri: ./
       Description: A simple example includes a HTTP delete method to delete one item from a database's table.
+      # Prevents to create a name like: 'serveless-crud-app-DeleteItemLambdaFunction-lMkaUCtS65dO'
+      FunctionName: DeleteItemLambdaFunction
       # Role: !GetAtt LambdaExecutionRole.Arn
       Role: arn:aws:iam::520138362070:role/LabRole
       Events:
         Api:
           Type: Api
           Properties:
+            RestApiId: !Ref MyServerlessApi
             Path: /{id}
             Method: DELETE
+    DeletionPolicy: "Delete"

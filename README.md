@@ -138,6 +138,12 @@ sam deploy --guided
 # sam deploy --guided --profile academy (for specific aws profile)
 ```
 
+(For this repository examples, run)
+
+```bash
+npm install --omit=dev
+```
+
 After, it can run only `sam deploy`
 
 Follow the prompts to configure your deployment settings.
@@ -225,6 +231,12 @@ lambda.invoke(params, (err, data) => {
 
 ### Through this repository
 
+Install dependencies that will be created a zip from:
+
+```bash
+npm install --only=prod
+```
+
 * Create table
 
   ```bash
@@ -261,6 +273,33 @@ lambda.invoke(params, (err, data) => {
   npm run delete -- "<id>"
   ```
 
+### API Gateway
+
+Since the endpoints are added into AWS API Gateway, we can access them directly as a REST API.
+
+To run API locally [https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-using-start-api.html#:~:text=To%20start%20a%20local%20instance,and%20iterate%20over%20your%20functions.](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-using-start-api.html#:~:text=To%20start%20a%20local%20instance,and%20iterate%20over%20your%20functions.):
+
+1. Enable Docker;
+2. Run:
+
+```bash
+sam local start-api --profile <profile>
+```
+
+If everything is cool, you should see something like:
+
+```bash
+Containers Initialization is done.
+Mounting GetAllItemsLambdaFunction at http://127.0.0.1:3000/ [GET]
+Mounting DeleteItemLambdaFunction at http://127.0.0.1:3000/{id} [DELETE]
+Mounting GetByIdLambdaFunction at http://127.0.0.1:3000/{id} [GET]
+Mounting CreateItemLambdaFunction at http://127.0.0.1:3000/ [POST]
+Mounting CreateTableLambdaFunction at http://127.0.0.1:3000/create-users-table [GET]
+Mounting UpdateItemLambdaFunction at http://127.0.0.1:3000/{id} [PUT]
+```
+
+So we can hit those APIs with curl or with browser.
+
 ### Tips
 
 _CreateTableLambdaFunction has no authentication. Is this okay? [y/N]:_
@@ -290,3 +329,29 @@ Verify if stack were removed:
 ```bash
 aws cloudformation wait stack-delete-complete --stack-name serveless-crud-app --profile academy
 ```
+
+__Execution failed due to configuration error: Invalid permissions on Lambda function_ 
+
+```bash
+aws lambda add-permission --function-name serveless-crud-app-GetByIdLambdaFunction-zrwjZeOIWA6Z --statement-id random-id-01 --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn arn:aws:iam::520138362070:role/LabRole --profile academy
+```
+
+or
+
+```bash
+aws lambda add-permission --function-name serveless-crud-app-GetAllItemsLambdaFunction-OE22TZ2B5hqs --statement-id random-id-03 --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn arn:aws:execute-api:us-east-1:520138362070:1lw8ew6ksj --profile academy
+```
+
+To avoid errors with duplication:
+
+```
+STACK_NAME="serveless-crud-app-$(uuidgen)"
+sam deploy --template-file template.yaml --stack-name $STACK_NAME --capabilities CAPABILITY_IAM --profile academy
+```
+
+I can't see my code at console editor - limit of the zip it should be 3 MB:
+
+[https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#limits-list](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#limits-list)
+
+It's possible to work with Layers: [https://docs.aws.amazon.com/lambda/latest/dg/creating-deleting-layers.html](https://docs.aws.amazon.com/lambda/latest/dg/creating-deleting-layers.html
+)

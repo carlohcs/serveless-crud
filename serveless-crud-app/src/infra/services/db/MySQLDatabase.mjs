@@ -22,6 +22,8 @@ export class MySQLDatabase {
 
   async init() {
     try {
+      // Avoid we having to import the mysql2 package in the main file (node_modules)
+      // const mysql = await import("https://cdn.skypack.dev/mysql2/promise");
       this.connection = await mysql.createConnection({
         host: process.env.DB_HOST,
         user: process.env.DB_USER,
