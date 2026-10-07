@@ -36,6 +36,7 @@ SAM-generated starter notes (IDE toolkits, `sam logs`, cleanup) remain in [`serv
 ## Contents
 
 * [Quick Start](#quick-start)
+* [Challenge step-by-step](#challenge-step-by-step)
 * [API](#api)
 * [Configuration](#configuration)
 * [Changelog](#changelog)
@@ -134,22 +135,7 @@ Call those URLs with curl, a browser (GET), or an HTTP client. AWS SAM CLI local
 
 **Invoke functions without the HTTP API**
 
-From `serveless-crud-app/`:
-
-| Action | Command |
-| --- | --- |
-| Create table | `npm run create:table` |
-| List users | `npm run get:all` |
-| Get by id | `npm run get:id -- "<id>"` |
-| Create | `npm run create -- "<name>"` |
-| Update | `npm run update -- "<id>" "<name>"` |
-| Delete | `npm run delete -- "<id>"` |
-
-Example of `npm run get:all` running against a local Lambda:
-
-<video src="running-lambda.mp4" controls width="100%" title="npm run get:all invoking a local Lambda">
-  <a href="running-lambda.mp4">Watch the recording of npm run get:all</a>
-</video>
+Use the npm scripts in [Through this repository](#through-this-repository) (`create:table`, `get:all`, `get:id`, `create`, `update`, `delete`). A recording of `npm run get:all` is in that section.
 
 Local Node entry (replace placeholders):
 
@@ -239,6 +225,195 @@ npm run test
 ```
 
 Tests live in `__tests__/`. Jest is configured for `.mjs` modules.
+
+## Challenge step-by-step
+
+This is the original challenge walkthrough: define Cognito, API Gateway, and CRUD Lambdas in SAM, then exercise this repository’s npm scripts. The shipped stack in `serveless-crud-app/template.yaml` uses RDS MySQL and Node.js 20; treat the template below as the challenge sketch, not a copy of the current file.
+
+### Step 1: Install AWS SAM CLI
+
+```bash
+brew tap aws/tap
+brew install aws-sam-cli
+```
+
+### Step 2: Initialize a new AWS SAM project
+
+```bash
+sam init
+```
+
+Follow the prompts to select a template and runtime. To work with this repository instead, skip `sam init` and use `serveless-crud-app/`.
+
+### Step 3: Define the AWS SAM template
+
+Edit `template.yaml` to define Lambda functions, API Gateway, and a Cognito user pool. Generated-file example:
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyUserPool
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: MyUserPoolClient
+      UserPoolId: !Ref UserPool
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: MyApi
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+
+  CreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/create.handler
+      Runtime: nodejs14.x
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /create
+            Method: post
+            RestApiId: !Ref ApiGateway
+
+  ReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/read.handler
+      Runtime: nodejs14.x
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /read
+            Method: get
+            RestApiId: !Ref ApiGateway
+
+  UpdateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/update.handler
+      Runtime: nodejs14.x
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /update
+            Method: put
+            RestApiId: !Ref ApiGateway
+
+  DeleteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/delete.handler
+      Runtime: nodejs14.x
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /delete
+            Method: delete
+            RestApiId: !Ref ApiGateway
+```
+
+### Step 4: Implement Lambda functions
+
+Create the Lambda handlers in `src`. For example, `create.js`:
+
+```javascript
+exports.handler = async (event) => {
+  // Your create logic here
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: "Item created" }),
+  };
+};
+```
+
+### Step 5: Validate the template
+
+```bash
+sam validate
+```
+
+### Step 6: Deploy
+
+```bash
+sam build
+sam deploy --guided
+# sam deploy --guided --profile academy
+```
+
+For this repository’s examples, install production dependencies first so SAM can zip them:
+
+```bash
+npm install --omit=dev
+```
+
+After that, you can run `sam deploy` only. Follow the prompts to configure deployment settings.
+
+### Through this repository
+
+From `serveless-crud-app/`, install the dependencies that will be included in the Lambda zip, then invoke CRUD operations with the npm scripts.
+
+Install dependencies that will be created a zip from:
+
+```bash
+npm install --only=prod
+```
+
+* Create table
+
+  ```bash
+  npm run create:table
+  ```
+
+* Get all
+
+  ```bash
+  npm run get:all
+  ```
+
+* Get id
+
+  ```bash
+  npm run get:id -- "<id>"
+  ```
+
+* Create
+
+  ```bash
+  npm run create -- "<name>"
+  ```
+
+* Update
+
+  ```bash
+  npm run update -- "<id>" "<name>"
+  ```
+
+* Delete
+
+  ```bash
+  npm run delete -- "<id>"
+  ```
+
+Example of `npm run get:all` running against a local Lambda:
+
+<video src="running-lambda.mp4" controls width="100%" title="npm run get:all invoking a local Lambda">
+  <a href="running-lambda.mp4">Watch the recording of npm run get:all</a>
+</video>
 
 ## API
 
