@@ -1,294 +1,126 @@
-# SERVELESS CRUD
+<hr>
 
-## Challenge
+<div align="center">
 
-Create a serverless CRUD application using AWS Lambda to handle create, read, update, and delete operations. Utilize AWS Serverless Application Model (SAM) for deployment, Amazon Cognito for authentication, and Amazon API Gateway to expose the Lambda functions as RESTful endpoints.
+<h1 align="center">serveless-crud</h1>
 
-To set up AWS SAM, Amazon Cognito, and Amazon API Gateway for your serverless CRUD application, follow these steps:
+</div>
 
-### Step 1: Install AWS SAM CLI
+<pre align="center">Serverless CRUD API on AWS Lambda, API Gateway, and RDS MySQL, deployed with AWS SAM.</pre>
 
-```bash
-brew tap aws/tap
-brew install aws-sam-cli
-```
+[![GitHub](https://img.shields.io/badge/github-carlohcs%2Fserveless-crud-181717?logo=github)](https://github.com/carlohcs/serveless-crud)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](https://nodejs.org/)
+[![AWS SAM](https://img.shields.io/badge/AWS-SAM-FF9900?logo=amazonaws)](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html)
+[![SLIM](https://img.shields.io/badge/Best%20Practices%20from-SLIM-blue)](https://nasa-ammos.github.io/slim/)
 
-### Step 2: Initialize a New AWS SAM Project
+[Issue Tracker](https://github.com/carlohcs/serveless-crud/issues)
 
-Create a new AWS SAM project:
+This repository is a learning project for a serverless CRUD application. The original challenge was to expose create, read, update, and delete operations through AWS Lambda, deploy with AWS Serverless Application Model (SAM), authenticate with Amazon Cognito, and publish the functions as REST endpoints via Amazon API Gateway.
 
-```bash
-sam init
-```
+The implemented application lives in [`serveless-crud-app/`](serveless-crud-app/). It deploys Node.js 20 Lambda functions behind API Gateway, a VPC, and an Amazon RDS MySQL instance. Handlers persist users in MySQL (`mysql2`). Cognito is documented as the intended authorizer for the challenge; wiring it in production still requires API Gateway authorizer configuration (see [FAQ](#frequently-asked-questions-faq)).
 
-Follow the prompts to select a template and runtime.
+A short local-run recording is available at [`running-lambda.mp4`](running-lambda.mp4).
 
-### Step 3: Define Your AWS SAM Template
+SAM-generated starter notes (IDE toolkits, `sam logs`, cleanup) remain in [`serveless-crud-app/README.md`](serveless-crud-app/README.md).
 
-Edit the `template.yaml` file to define your Lambda functions, API Gateway, and Cognito User Pool.
+## Features
 
-Generated file example:
+* REST CRUD for a `users` table: list, get by id, create, update, and delete
+* Extra endpoint to create the `users` table (`GET /create-users-table`)
+* AWS SAM template for Lambda, API Gateway, VPC, security groups, and RDS MySQL
+* Local API emulation with `sam local start-api` (Docker required)
+* npm trigger scripts to invoke handlers from the command line
+* Jest unit tests under `serveless-crud-app/__tests__`
+* Optional CodeBuild packaging via `buildspec.yml`
 
+## Contents
 
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: 'AWS::Serverless-2016-10-31'
-Resources:
-  UserPool:
-    Type: AWS::Cognito::UserPool
-    Properties:
-      UserPoolName: MyUserPool
+* [Quick Start](#quick-start)
+* [API](#api)
+* [Configuration](#configuration)
+* [Changelog](#changelog)
+* [FAQ](#frequently-asked-questions-faq)
+* [Contributing](#contributing)
+* [License](#license)
+* [Support](#support)
 
-  UserPoolClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-      ClientName: MyUserPoolClient
-      UserPoolId: !Ref UserPool
+## Quick Start
 
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: MyApi
-      Auth:
-        DefaultAuthorizer: CognitoAuthorizer
-        Authorizers:
-          CognitoAuthorizer:
-            UserPoolArn: !GetAtt UserPool.Arn
+This guide gets the sample running locally and on AWS. Application source, `template.yaml`, and npm scripts are in `serveless-crud-app/`.
 
-  CreateFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/create.handler
-      Runtime: nodejs14.x
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /create
-            Method: post
-            RestApiId: !Ref ApiGateway
+### Requirements
 
-  ReadFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/read.handler
-      Runtime: nodejs14.x
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /read
-            Method: get
-            RestApiId: !Ref ApiGateway
+* [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html) (macOS: `brew tap aws/tap` then `brew install aws-sam-cli`)
+* [Node.js 20+](https://nodejs.org/en/) and npm
+* [Docker](https://hub.docker.com/search/?type=edition&offering=community) for `sam local` (API and function emulation)
+* AWS CLI credentials (this repo’s `samconfig.toml` uses profile `academy` and region `us-east-1`)
+* An IAM role Lambda can assume. `template.yaml` currently pins `Role: arn:aws:iam::520138362070:role/LabRole` — replace it with a role in your account before deploy
 
-  UpdateFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/update.handler
-      Runtime: nodejs14.x
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /update
-            Method: put
-            RestApiId: !Ref ApiGateway
+### Setup Instructions
 
-  DeleteFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: src/delete.handler
-      Runtime: nodejs14.x
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            Path: /delete
-            Method: delete
-            RestApiId: !Ref ApiGateway
-```
+1. Clone the repository.
 
-### Step 4: Implement Lambda Functions
+   ```bash
+   git clone https://github.com/carlohcs/serveless-crud.git
+   cd serveless-crud/serveless-crud-app
+   ```
 
-Create the Lambda function handlers in the `src` directory. For example, `create.js`:
+2. Install production dependencies used in the Lambda zip (either form works):
 
-```javascript
-exports.handler = async (event) => {
-  // Your create logic here
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ message: 'Item created' }),
-  };
-};
-```
+   ```bash
+   npm install --omit=dev
+   # or
+   npm install --only=prod
+   ```
 
-### Step 5: Check if the file is fine
+   For tests and local tooling, run `npm install` so `devDependencies` (Jest, AWS SDK mocks) are included.
 
-```bash
-sam validate
-```
+3. Validate the SAM template:
 
-### Step 6: Deploy the Application
+   ```bash
+   sam validate
+   ```
 
-Build and deploy your application using the AWS SAM CLI:
+4. Review `template.yaml` parameters (`Environment`, `DBInstanceIdentifier`, `DBName`, `DBUser`, `DBPassword`) and the hardcoded Lambda `Role`. Change the database password from the template default before any shared or production deploy.
+
+### Run Instructions
+
+**Build and deploy to AWS**
 
 ```bash
 sam build
 sam deploy --guided
-# sam deploy --guided --profile academy (for specific aws profile)
+# sam deploy --guided --profile academy
 ```
 
-(For this repository examples, run)
+After the first guided deploy, later deploys can be `sam deploy` if settings were saved to `samconfig.toml`.
+
+Convenience scripts in `package.json`:
 
 ```bash
-npm install --omit=dev
+npm run build          # sam build --no-cached
+npm run deploy         # bash deploy.sh
+npm run build:deploy   # build then deploy
 ```
 
-After, it can run only `sam deploy`
-
-Follow the prompts to configure your deployment settings.
-
-### Step 6: Test Your Endpoints
-
-After deployment, you can test your endpoints using tools like Postman or curl. Ensure you have the necessary authentication tokens from Amazon Cognito.
-
-#### Using the AWS Management Console
-
-1. Go to the AWS Lambda Console.
-2. Select the Lambda function you want to execute.
-3. Click on "Test" at the top of the page.
-4. Configure a test event (you can use a sample event or create a custom one).
-5. Click "Test" again to execute the function.
-
-#### Using the AWS CLI
-
-You can use the `invoke` command from the AWS CLI to execute the Lambda function. Here is an example:
+`deploy.sh` writes a stack name into `samconfig.toml` and runs `sam deploy` with `--profile academy`. To avoid CloudFormation name collisions, you can deploy with a unique stack name:
 
 ```bash
-aws lambda invoke --function-name DeleteItemLambdaFunction --payload '{"id": "123"}' response.json
+STACK_NAME="serveless-crud-app-$(uuidgen)"
+sam deploy --template-file template.yaml --stack-name $STACK_NAME --capabilities CAPABILITY_IAM --profile academy
 ```
 
-* `--function-name`: Name of the Lambda function.
-* `--payload`: JSON with the input data for the function.
-* `response.json`: File where the execution response will be saved.
+**Run the API locally**
 
-#### Using the AWS SDK (Python)
-
-Here is an example of how to invoke a Lambda function using the AWS SDK for Python (Boto3):
-
-```python
-import boto3
-import json
-
-# Create a Lambda client
-client = boto3.client('lambda')
-
-# Input Data for Lambda Function
-payload = {
-    "id": "123"
-}
-
-# Invoke the Lambda function
-response = client.invoke(
-    FunctionName='DeleteItemLambdaFunction',
-    InvocationType='RequestResponse',
-    Payload=json.dumps(payload)
-)
-
-# Read the response
-response_payload = json.loads(response['Payload'].read())
-print(response_payload)
-```
-
-#### Using the AWS SDK (Node.js)
-
-Here is an example of how to invoke a Lambda function using the AWS SDK for Node.js:
-
-```javascript
-const AWS = require('aws-sdk');
-const lambda = new AWS.Lambda();
-
-// Input Data for Lambda Function
-const payload = {
-  id: "123"
-};
-
-// Params to invoke Lambda function
-const params = {
-  FunctionName: 'DeleteItemLambdaFunction',
-  Payload: JSON.stringify(payload)
-};
-
-// Invoke the Lambda function
-lambda.invoke(params, (err, data) => {
-  if (err) {
-    console.error(err);
-  } else {
-    console.log(JSON.parse(data.Payload));
-  }
-});
-```
-
-### Through this repository
-
-Install dependencies that will be created a zip from:
-
-```bash
-npm install --only=prod
-```
-
-* Create table
-
-  ```bash
-  npm run create:table
-  ```
-
-* Get all
-
-  ```bash
-  npm run get:all
-  ```
-
-* Get id
-
-  ```bash
-  npm run get:id -- "<id>"
-  ```
-
-* Create
-
-  ```bash
-  npm run create -- "<name>"
-  ```
-
-* Update
-
-  ```bash
-  npm run update -- "<id>" "<name>"
-  ```
-
-* Delete
-
-  ```bash
-  npm run delete -- "<id>"
-  ```
-
-### API Gateway
-
-Since the endpoints are added into AWS API Gateway, we can access them directly as a REST API.
-
-To run API locally [https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-using-start-api.html#:~:text=To%20start%20a%20local%20instance,and%20iterate%20over%20your%20functions.](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-using-start-api.html#:~:text=To%20start%20a%20local%20instance,and%20iterate%20over%20your%20functions.):
-
-1. Enable Docker;
-2. Run:
+Enable Docker, then:
 
 ```bash
 sam local start-api --profile <profile>
 ```
 
-If everything is cool, you should see something like:
+Expected console output looks like:
 
-```bash
+```text
 Containers Initialization is done.
 Mounting GetAllItemsLambdaFunction at http://127.0.0.1:3000/ [GET]
 Mounting DeleteItemLambdaFunction at http://127.0.0.1:3000/{id} [DELETE]
@@ -298,60 +130,209 @@ Mounting CreateTableLambdaFunction at http://127.0.0.1:3000/create-users-table [
 Mounting UpdateItemLambdaFunction at http://127.0.0.1:3000/{id} [PUT]
 ```
 
-So we can hit those APIs with curl or with browser.
+Call those URLs with curl, a browser (GET), or an HTTP client. AWS SAM CLI local API docs: [Start an API locally](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-using-start-api.html).
 
-### Tips
+**Invoke functions without the HTTP API**
 
-_CreateTableLambdaFunction has no authentication. Is this okay? [y/N]:_
+From `serveless-crud-app/`:
 
-#### Solution
+| Action | Command |
+| --- | --- |
+| Create table | `npm run create:table` |
+| List users | `npm run get:all` |
+| Get by id | `npm run get:id -- "<id>"` |
+| Create | `npm run create -- "<name>"` |
+| Update | `npm run update -- "<id>" "<name>"` |
+| Delete | `npm run delete -- "<id>"` |
 
-```yaml
-MyCognitoAuthorizer:
-  Type: AWS::ApiGateway::Authorizer
-  Properties:
-    Name: CognitoAuthorizer
-    Type: COGNITO_USER_POOLS
-    IdentitySource: method.request.header.Authorization
-    RestApiId: !Ref ServerlessRestApi
-    ProviderARNs:
-      - !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}
-```
+Example of `npm run get:all` running against a local Lambda:
 
-_Some error happened. Remove stack_
+<video src="running-lambda.mp4" controls width="100%" title="npm run get:all invoking a local Lambda">
+  <a href="running-lambda.mp4">Watch the recording of npm run get:all</a>
+</video>
 
-```bash
-aws cloudformation delete-stack --stack-name serveless-crud-app --profile academy
-```
-
-Verify if stack were removed:
+Local Node entry (replace placeholders):
 
 ```bash
-aws cloudformation wait stack-delete-complete --stack-name serveless-crud-app --profile academy
+npm start
+# expands to:
+# DB_TYPE=mysql DB_HOST=<DB_HOST> DB_USER=<DB_USER> DB_PASSWORD=<DB_PASSWORD> DB_NAME=<DB_NAME> node --experimental-vm-modules ./src/index.mjs
 ```
 
-__Execution failed due to configuration error: Invalid permissions on Lambda function_ 
+### Usage Examples
+
+After deploy, test through API Gateway (REST), the Lambda console, the AWS CLI, or an SDK. Authenticated routes need a Cognito token once the authorizer is attached.
+
+**AWS Management Console**
+
+1. Open the AWS Lambda console.
+2. Select the function.
+3. Choose **Test**.
+4. Configure a test event (sample or custom JSON).
+5. Choose **Test** again to invoke.
+
+**AWS CLI**
 
 ```bash
-aws lambda add-permission --function-name serveless-crud-app-GetByIdLambdaFunction-zrwjZeOIWA6Z --statement-id random-id-01 --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn arn:aws:iam::520138362070:role/LabRole --profile academy
+aws lambda invoke --function-name DeleteItemLambdaFunction --payload '{"id": "123"}' response.json
 ```
 
-or
+* `--function-name`: Lambda function name
+* `--payload`: JSON input
+* `response.json`: file that stores the response
 
-```bash
-aws lambda add-permission --function-name serveless-crud-app-GetAllItemsLambdaFunction-OE22TZ2B5hqs --statement-id random-id-03 --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn arn:aws:execute-api:us-east-1:520138362070:1lw8ew6ksj --profile academy
-```
+**AWS SDK (Python / Boto3)**
 
-To avoid errors with duplication:
+```python
+import boto3
+import json
 
-```
-STACK_NAME="serveless-crud-app-$(uuidgen)"
-sam deploy --template-file template.yaml --stack-name $STACK_NAME --capabilities CAPABILITY_IAM --profile academy
-```
-
-I can't see my code at console editor - limit of the zip it should be 3 MB:
-
-[https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#limits-list](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#limits-list)
-
-It's possible to work with Layers: [https://docs.aws.amazon.com/lambda/latest/dg/creating-deleting-layers.html](https://docs.aws.amazon.com/lambda/latest/dg/creating-deleting-layers.html
+client = boto3.client("lambda")
+payload = {"id": "123"}
+response = client.invoke(
+    FunctionName="DeleteItemLambdaFunction",
+    InvocationType="RequestResponse",
+    Payload=json.dumps(payload),
 )
+print(json.loads(response["Payload"].read()))
+```
+
+**AWS SDK (Node.js)**
+
+```javascript
+const AWS = require("aws-sdk");
+const lambda = new AWS.Lambda();
+
+const params = {
+  FunctionName: "DeleteItemLambdaFunction",
+  Payload: JSON.stringify({ id: "123" }),
+};
+
+lambda.invoke(params, (err, data) => {
+  if (err) {
+    console.error(err);
+  } else {
+    console.log(JSON.parse(data.Payload));
+  }
+});
+```
+
+### Build Instructions
+
+SAM packages code from `CodeUri: ./` for each function.
+
+```bash
+cd serveless-crud-app
+sam build
+# or
+npm run build
+```
+
+CI packaging (`buildspec.yml`): install deps, run tests, prune `devDependencies`, then `aws cloudformation package` against `template.yaml`.
+
+### Test Instructions
+
+```bash
+cd serveless-crud-app
+npm install
+npm run test
+```
+
+Tests live in `__tests__/`. Jest is configured for `.mjs` modules.
+
+## API
+
+Routes from the SAM function events (and `sam local start-api` mounts):
+
+| Method | Path | Lambda |
+| --- | --- | --- |
+| `GET` | `/create-users-table` | `CreateTableLambdaFunction` |
+| `GET` | `/` | `GetAllItemsLambdaFunction` |
+| `POST` | `/` | `CreateItemLambdaFunction` |
+| `GET` | `/{id}` | `GetByIdLambdaFunction` |
+| `PUT` | `/{id}` | `UpdateItemLambdaFunction` |
+| `DELETE` | `/{id}` | `DeleteItemLambdaFunction` |
+
+CloudFormation outputs include the API Gateway base URL (`MyServerlessApi`) and the RDS endpoint (`MyDBInstanceEndpoint`).
+
+## Configuration
+
+**SAM / CloudFormation parameters** (`template.yaml`): `Environment` (`dev` \| `prod`), `DBInstanceIdentifier`, `DBName`, `DBUser`, `DBPassword`.
+
+**Lambda environment variables:** `TABLE_NAME` (`users`), `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_TYPE` (`mysql`).
+
+**`samconfig.toml`:** stack name, `us-east-1`, profile `academy`, `CAPABILITY_IAM`, `parameter_overrides` for environment and DB identifiers.
+
+**IAM:** functions use a lab `LabRole` ARN. On a paid account you can instead create a `LambdaExecutionRole` (commented in the template) with RDS and VPC permissions.
+
+## Changelog
+
+This repository does not ship a `CHANGELOG.md`. See [GitHub commits](https://github.com/carlohcs/serveless-crud/commits) and [releases](https://github.com/carlohcs/serveless-crud/releases) for history.
+
+## Frequently Asked Questions (FAQ)
+
+1. **SAM asks: `CreateTableLambdaFunction` has no authentication. Is this okay?**
+   - For local labs it may be acceptable. For a protected API, add a Cognito user-pool authorizer on API Gateway, for example:
+
+   ```yaml
+   MyCognitoAuthorizer:
+     Type: AWS::ApiGateway::Authorizer
+     Properties:
+       Name: CognitoAuthorizer
+       Type: COGNITO_USER_POOLS
+       IdentitySource: method.request.header.Authorization
+       RestApiId: !Ref ServerlessRestApi
+       ProviderARNs:
+         - !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}
+   ```
+
+2. **How do I tear down a failed or unused stack?**
+
+   ```bash
+   aws cloudformation delete-stack --stack-name serveless-crud-app --profile academy
+   aws cloudformation wait stack-delete-complete --stack-name serveless-crud-app --profile academy
+   ```
+
+   If you used another stack name (for example from `deploy.sh` or `uuidgen`), pass that name instead.
+
+3. **`Execution failed due to configuration error: Invalid permissions on Lambda function`**
+   - Grant API Gateway permission to invoke the function. Replace names, statement ids, and ARNs with values from your account:
+
+   ```bash
+   aws lambda add-permission \
+     --function-name GetByIdLambdaFunction \
+     --statement-id random-id-01 \
+     --action lambda:InvokeFunction \
+     --principal apigateway.amazonaws.com \
+     --source-arn arn:aws:execute-api:us-east-1:<account-id>:<api-id>/* \
+     --profile academy
+   ```
+
+   Repeat for each function if needed. Duplicate `statement-id` values cause errors; use a unique id per statement.
+
+4. **I cannot edit code in the Lambda console**
+   - The console inline editor only works for small packages (on the order of 3 MB). See [Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html#limits-list). Use [Lambda layers](https://docs.aws.amazon.com/lambda/latest/dg/creating-deleting-layers.html) or keep editing in this repo and redeploy with SAM.
+
+5. **`sam init` vs this repository**
+   - You do not need `sam init` to use this project; the app already exists under `serveless-crud-app/`. `sam init` is only for scaffolding a new SAM app from scratch.
+
+## Contributing
+
+1. Open a [GitHub issue](https://github.com/carlohcs/serveless-crud/issues) describing the change.
+2. [Fork](https://github.com/carlohcs/serveless-crud/fork) the repository.
+3. Implement the change in your fork.
+4. Open a pull request and request a review from the maintainer.
+
+There is no `CONTRIBUTING.md` or `CODE_OF_CONDUCT.md` in this repository yet.
+
+**Working on your first pull request?** See [How to Contribute to an Open Source Project on GitHub](https://kcd.im/pull-request).
+
+## License
+
+No `LICENSE` file is present in this repository. Add one before treating the project as open source with redistributable terms.
+
+## Support
+
+Maintainer: [carlohcs](https://github.com/carlohcs)
+
+Questions and bugs: [GitHub Issues](https://github.com/carlohcs/serveless-crud/issues)
